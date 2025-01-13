@@ -1,1 +1,9 @@
-
+{
+    "keys": [
+        {
+            "key": "examplekey123",
+            "status": "active",
+            "expiration": 1680000000
+        }
+    ]
+}
