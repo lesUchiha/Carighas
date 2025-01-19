@@ -1,9 +1,5 @@
 {
-  "keys": [
-    {
-      "key": "1234567890abcdef",
-      "status": "active",
-      "expiration": 1735689600
-    }
-  ]
+  "1234567890abcdef": {
+    "expiration": "2026-01-19 23:59:59"
+  }
 }
