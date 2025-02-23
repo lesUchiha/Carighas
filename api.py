@@ -72,6 +72,8 @@ async def claim_key(code: str = Query(..., description="El código temporal de l
                     owner: str = Query(..., description="ID del owner que reclama la key")):
     """
     Reclama la key pendiente a partir del código temporal.
+    El código temporal tiene formato TEMP-FREE-<16 dígitos random> o TEMP-PREMIUM-<16 dígitos random>.
+    La key final se obtiene eliminando el prefijo "TEMP-".
     Asigna el owner y marca la key como reclamada.
     """
     if code not in keys_store:
@@ -81,7 +83,15 @@ async def claim_key(code: str = Query(..., description="El código temporal de l
     if key_data.get("claimed", False):
         raise HTTPException(status_code=400, detail="La key ya ha sido reclamada")
     
+    # Generar la key final eliminando el prefijo "TEMP-"
+    final_key = code.replace("TEMP-", "", 1)
     key_data["owner"] = owner
     key_data["claimed"] = True
+
+    # Eliminar la entrada temporal y agregar la entrada final
+    del keys_store[code]
+    keys_store[final_key] = key_data
     save_keys_to_file()
-    return { code: key_data }
+    
+    return { final_key: key_data }
+
