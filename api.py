@@ -16,7 +16,7 @@ keys_store: Dict[str, dict] = {}
 
 class Key(BaseModel):
     key: str
-    valid: bool = True
+    expiration: Union[str, None] = None
     security_code: Union[str, None] = None
 
 def load_keys_from_file():
