@@ -59,6 +59,17 @@ async def verify_key(key: str = Query(..., description="La key a verificar")):
     else:
         raise HTTPException(status_code=404, detail="Key no encontrada")
 
+@app.delete("/delete_key")
+async def delete_key(key: str):
+    """
+    Elimina una key del almacén.
+    """
+    if key in keys_store:
+        del keys_store[key]
+        return {"message": f"Key {key} eliminada correctamente"}
+    else:
+        raise HTTPException(status_code=404, detail="Key no encontrada")
+
 @app.post("/set_security", summary="Establecer código de seguridad", tags=["Keys"])
 async def set_security(key: str = Query(..., description="La key a actualizar"),
                        code: str = Query(..., description="El código de seguridad a asignar")):
