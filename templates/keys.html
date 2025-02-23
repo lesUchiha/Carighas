@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Keys de Carighas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        h1 {
+            color: #333;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Listado de Keys</h1>
+    <ul id="keys-list"></ul>
+    <script>
+        fetch("/keys")
+        .then(response => response.json())
+        .then(data => {
+            const keysList = document.getElementById('keys-list');
+            Object.keys(data).forEach(key => {
+                const keyData = data[key];
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>Key:</strong> ${key} <br><strong>Válida:</strong> ${keyData.valid} <br><strong>Código de Seguridad:</strong> ${keyData.security_code || 'No asignado'}`;
+                keysList.appendChild(li);
+            });
+        });
+    </script>
+</body>
+</html>
