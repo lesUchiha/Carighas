@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, JSONResponse
 import aiohttp
 import uuid
 from pydantic import BaseModel, Field
@@ -6,14 +8,17 @@ from typing import Dict, Any, Union
 
 app = FastAPI(
     title="CarighasBot API",
-    description="API para gestionar las keys de Carighas",
+    description="API para gestionar y mostrar las keys de Carighas",
     version="1.0.0"
 )
+
+# Configuración de Jinja2 para las plantillas
+templates = Jinja2Templates(directory="templates")
 
 # URL remota donde se almacenan las keys
 KEYS_URL = "https://lesuchiha.github.io/Carighas/keys.json"
 
-# Almacén en memoria para las keys
+# Almacén en memoria para las keys (se cargan inicialmente desde la URL remota)
 keys_store: Dict[str, Any] = {}
 
 class Key(BaseModel):
@@ -46,28 +51,22 @@ async def load_remote_keys() -> None:
 async def startup_event():
     await load_remote_keys()
 
-@app.get("/", summary="Inicio", tags=["Root"])
-async def root():
+@app.get("/", response_class=HTMLResponse, summary="Página de Inicio", tags=["Página"])
+async def root(request: Request):
     """
     Ruta raíz que muestra un mensaje de bienvenida.
     """
-    return {"message": "Bienvenido a la API de CarighasBot"}
+    return templates.TemplateResponse("keys.html", {"request": request, "keys": keys_store})
 
+# Endpoint para recargar las keys manualmente (si lo deseas)
 @app.get("/reload_keys", summary="Recargar Keys", tags=["Keys"])
 async def reload_keys():
-    """
-    Recarga las keys desde la fuente remota.
-    Útil si se actualizó el JSON manualmente.
-    """
     await load_remote_keys()
     return {"message": "Keys recargadas correctamente"}
 
+# Otros endpoints (comprar, verificar, etc.) se mantienen según tu código anterior...
 @app.post("/buy_key", summary="Comprar Key", tags=["Keys"])
 async def buy_key():
-    """
-    Genera una nueva key única y la añade al almacén.
-    Nota: esta nueva key solo se guarda en memoria y no se actualiza en el JSON remoto.
-    """
     new_key = str(uuid.uuid4())
     new_key_data = {"key": new_key, "valid": True, "security_code": None}
     keys_store[new_key] = new_key_data
@@ -75,10 +74,6 @@ async def buy_key():
 
 @app.get("/verify_key", summary="Verificar Key", tags=["Keys"])
 async def verify_key(key: str = Query(..., description="La key a verificar")):
-    """
-    Verifica si una key existe y es válida.
-    Retorna la información de la key si se encuentra.
-    """
     if key in keys_store:
         return {"valid": keys_store[key].get("valid", False), "key_data": keys_store[key]}
     else:
@@ -89,9 +84,6 @@ async def set_security(
     key: str = Query(..., description="La key a actualizar"),
     code: str = Query(..., description="El código de seguridad a asignar")
 ):
-    """
-    Establece o actualiza el código de seguridad para una key dada.
-    """
     if key in keys_store:
         keys_store[key]["security_code"] = code
         return {"message": "Código de seguridad actualizado correctamente", "key_data": keys_store[key]}
