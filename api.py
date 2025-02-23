@@ -1,99 +1,71 @@
 from fastapi import FastAPI, HTTPException, Query
-import aiohttp
-import uuid
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Union
+from typing import Dict, Union
+import json
+import uuid
+import os
 
-app = FastAPI(
-    title="CarighasBot API",
-    description="API para gestionar las keys de Carighas",
-    version="1.0.0"
-)
+app = FastAPI()
 
-# URL remota donde se almacenan las keys
-KEYS_URL = "https://lesuchiha.github.io/Carighas/keys.json"
+# Ruta para almacenar el archivo JSON con las keys
+KEYS_FILE_PATH = "keys.json"
 
-# Almacén en memoria para las keys
-keys_store: Dict[str, Any] = {}
+# Almacén de keys en memoria
+keys_store: Dict[str, dict] = {}
 
 class Key(BaseModel):
-    key: str = Field(..., description="Identificador único de la key")
-    valid: bool = Field(True, description="Indica si la key es válida")
-    security_code: Union[str, None] = Field(None, description="Código de seguridad asociado")
+    key: str
+    valid: bool = True
+    security_code: Union[str, None] = None
 
-async def load_remote_keys() -> None:
-    """
-    Carga las keys desde el archivo remoto JSON y las almacena en `keys_store`.
-    Se asume que el JSON es un objeto dict o una lista de objetos con la propiedad "key".
-    """
+def load_keys_from_file():
+    """Carga las keys desde el archivo JSON al inicio de la API."""
     global keys_store
-    async with aiohttp.ClientSession() as session:
-        async with session.get(KEYS_URL) as response:
-            if response.status == 200:
-                data = await response.json()
-                # Si el JSON es un dict, lo usamos directamente.
-                if isinstance(data, dict):
-                    keys_store = data
-                # Si es una lista, convertimos cada objeto en una entrada del dict usando su campo "key"
-                elif isinstance(data, list):
-                    keys_store = {item["key"]: item for item in data if "key" in item}
-                else:
-                    raise HTTPException(status_code=500, detail="Formato de JSON no soportado")
-            else:
-                raise HTTPException(status_code=500, detail="Error al obtener las keys remotas")
+    if os.path.exists(KEYS_FILE_PATH):
+        with open(KEYS_FILE_PATH, "r") as file:
+            keys_store = json.load(file)
+    else:
+        keys_store = {}
+
+def save_keys_to_file():
+    """Guarda las keys del almacén al archivo JSON."""
+    with open(KEYS_FILE_PATH, "w") as file:
+        json.dump(keys_store, file, indent=4)
 
 @app.on_event("startup")
 async def startup_event():
-    await load_remote_keys()
+    load_keys_from_file()
 
-@app.get("/", summary="Inicio", tags=["Root"])
-async def root():
-    """
-    Ruta raíz que muestra un mensaje de bienvenida.
-    """
-    return {"message": "Bienvenido a la API de CarighasBot"}
+@app.get("/keys", response_class=JSONResponse, summary="Obtener todas las keys", tags=["Keys"])
+async def get_keys():
+    """Devuelve todas las keys almacenadas."""
+    return keys_store
 
-@app.get("/reload_keys", summary="Recargar Keys", tags=["Keys"])
-async def reload_keys():
-    """
-    Recarga las keys desde la fuente remota.
-    Útil si se actualizó el JSON manualmente.
-    """
-    await load_remote_keys()
-    return {"message": "Keys recargadas correctamente"}
-
-@app.post("/buy_key", summary="Comprar Key", tags=["Keys"])
-async def buy_key():
-    """
-    Genera una nueva key única y la añade al almacén.
-    Nota: esta nueva key solo se guarda en memoria y no se actualiza en el JSON remoto.
-    """
-    new_key = str(uuid.uuid4())
-    new_key_data = {"key": new_key, "valid": True, "security_code": None}
-    keys_store[new_key] = new_key_data
-    return {"key": new_key}
+@app.post("/keys", response_class=JSONResponse, summary="Agregar una nueva key", tags=["Keys"])
+async def add_key(key: Key):
+    """Agrega una nueva key al almacén y la guarda en el archivo JSON."""
+    if key.key in keys_store:
+        raise HTTPException(status_code=400, detail="La key ya existe")
+    keys_store[key.key] = key.dict()
+    save_keys_to_file()
+    return {"message": "Key añadida correctamente", "key": key.key}
 
 @app.get("/verify_key", summary="Verificar Key", tags=["Keys"])
 async def verify_key(key: str = Query(..., description="La key a verificar")):
-    """
-    Verifica si una key existe y es válida.
-    Retorna la información de la key si se encuentra.
-    """
+    """Verifica si una key existe y es válida."""
     if key in keys_store:
-        return {"valid": keys_store[key].get("valid", False), "key_data": keys_store[key]}
+        return {"valid": keys_store[key]["valid"], "key_data": keys_store[key]}
     else:
         raise HTTPException(status_code=404, detail="Key no encontrada")
 
-@app.post("/set_security", summary="Establecer Código de Seguridad", tags=["Keys"])
-async def set_security(
-    key: str = Query(..., description="La key a actualizar"),
-    code: str = Query(..., description="El código de seguridad a asignar")
-):
-    """
-    Establece o actualiza el código de seguridad para una key dada.
-    """
+@app.post("/set_security", summary="Establecer código de seguridad", tags=["Keys"])
+async def set_security(key: str = Query(..., description="La key a actualizar"),
+                       code: str = Query(..., description="El código de seguridad a asignar")):
+    """Establece o actualiza el código de seguridad para una key dada."""
     if key in keys_store:
         keys_store[key]["security_code"] = code
+        save_keys_to_file()
         return {"message": "Código de seguridad actualizado correctamente", "key_data": keys_store[key]}
     else:
         raise HTTPException(status_code=404, detail="Key no encontrada")
